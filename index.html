@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Atomberg Fan Controller</title>
+    <style>
+        /* -------------- Global Styles -------------- */
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        /* Main Title */
+        h2 {
+            text-align: center;
+            color: #222;
+            margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        /* -------------- Card Styling -------------- */
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px auto;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+        }
+
+        /* Card titles */
+        .card h3 {
+            margin-top: 0;
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        /* -------------- Input Fields -------------- */
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0 15px 0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        /* -------------- Buttons -------------- */
+        button {
+            padding: 12px 18px;
+            background-color: #ffbf00;
+            color: #222;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin: 5px 5px 5px 0;
+        }
+
+        button:hover {
+            background-color: #e6ac00;
+        }
+
+        /* Control buttons under device list */
+        #devices button {
+            margin-top: 10px;
+            margin-right: 5px;
+        }
+
+        /* -------------- Device List -------------- */
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            background: #fafafa;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            border-left: 5px solid #ffbf00;
+        }
+
+        /* Responsive */
+        @media screen and (max-width: 480px) {
+            .card {
+                width: 95%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<h2>Atomberg Fan Controller</h2>
+
+<div class="card">
+    <h3>Enter Your Credentials</h3>
+    <input id="apiKey" placeholder="API Key">
+    <input id="refreshToken" placeholder="Refresh Token">
+    <button id="getTokenBtn">Get Access Token</button>
+</div>
+
+<div id="tokenBox" class="card" style="display:none;">
+    <h3>Access Token</h3>
+    <p id="accessTokenDisplay"></p>
+</div>
+
+<div id="fanList" class="card" style="display:none;">
+    <h3>atomberg</h3>
+    <ul id="devices"></ul>
+</div>
+
+<script>
+    const BASE_URL = "https://developer.atomberg-iot.com/";
+    const getTokenBtn = document.getElementById('getTokenBtn');
+    const apiKeyInput = document.getElementById('apiKey');
+    const refreshTokenInput = document.getElementById('refreshToken');
+    const tokenBox = document.getElementById('tokenBox');
+    const accessTokenDisplay = document.getElementById('accessTokenDisplay');
+    const fanListCard = document.getElementById('fanList');
+    const devicesList = document.getElementById('devices');
+
+    getTokenBtn.addEventListener('click', async () => {
+        const apiKey = apiKeyInput.value.trim();
+        const refreshToken = refreshTokenInput.value.trim();
+        let accessToken = '';
+
+        tokenBox.style.display = 'none';
+        fanListCard.style.display = 'none';
+        devicesList.innerHTML = '';
+
+        try {
+            if (apiKey) {
+                // Get access token using API Key
+                const res = await fetch(`${BASE_URL}api/getAccessToken`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey })
+                });
+                if (!res.ok) throw new Error('Failed to get access token with API Key');
+                const data = await res.json();
+                accessToken = data.accessToken;
+            } else if (refreshToken) {
+                // Get access token using Refresh Token
+                const res = await fetch(`${BASE_URL}api/refreshAccessToken`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken })
+                });
+                if (!res.ok) throw new Error('Failed to get access token with Refresh Token');
+                const data = await res.json();
+                accessToken = data.accessToken;
+            } else {
+                alert('Please enter API Key or Refresh Token');
+                return;
+            }
+
+            accessTokenDisplay.textContent = accessToken;
+            tokenBox.style.display = 'block';
+
+            // Fetch FAN list
+            const listRes = await fetch(`${BASE_URL}api/fanList`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (!listRes.ok) throw new Error('Failed to fetch FAN list');
+            const fanData = await listRes.json();
+
+            fanData.forEach(fan => {
+                const li = document.createElement('li');
+                li.textContent = fan.name;
+
+                // ON button
+                const onBtn = document.createElement('button');
+                onBtn.textContent = 'ON';
+                onBtn.addEventListener('click', async () => {
+                    await fetch(`${BASE_URL}api/fanControl`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify({ fanId: fan.id, action: 'on' })
+                    });
+                    alert(`${fan.name} turned ON`);
+                });
+
+                // OFF button
+                const offBtn = document.createElement('button');
+                offBtn.textContent = 'OFF';
+                offBtn.addEventListener('click', async () => {
+                    await fetch(`${BASE_URL}api/fanControl`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify({ fanId: fan.id, action: 'off' })
+                    });
+                    alert(`${fan.name} turned OFF`);
+                });
+
+                // Speed slider
+                const speedInput = document.createElement('input');
+                speedInput.type = 'range';
+                speedInput.min = 1;
+                speedInput.max = 5;
+                speedInput.value = fan.speed || 1;
+                speedInput.addEventListener('change', async () => {
+                    await fetch(`${BASE_URL}api/fanControl`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify({ fanId: fan.id, action: 'speed', value: speedInput.value })
+                    });
+                });
+
+                li.appendChild(onBtn);
+                li.appendChild(offBtn);
+                li.appendChild(speedInput);
+                devicesList.appendChild(li);
+            });
+
+            fanListCard.style.display = 'block';
+
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+</script>
+
+</body>
+</html>
